@@ -1,0 +1,316 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Steve Mansour - Performer Lyric Viewer</title>
+    <link href="../sman.css" rel="stylesheet" type="text/css">
+    <link href="../buttons.css" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="../fa/css/all.css">
+    <script>
+        var app = {
+            device: "IAC Driver IAC Bus 2", // Create a new device in the Audio MIDI Setup app for lyrics.
+            song: 0,                        // current song index
+            page: 0,                        // current page (each page has 127 lines)
+            line: 0,                        // lyric line within the page
+            songs: [],                      // array of songs
+        };
+
+
+        // formatMessageData - a stringer for unhandled messages.
+        //   Currently, it just lists the data array.
+        //
+        // INPUTS
+        //   msg     = the midi message
+        //------------------------------------------------------------
+        function formatMessageData(msg) {
+            var s='';
+            for (i = 0; i < msg.data.length; i++) {
+                s += ' ' + msg.data[i];
+            }
+            return s;
+        }
+
+        // feedbackMessage - set the innerHTML of the supplied message
+        // html node to the supplied message string.
+        //
+        // INPUTS
+        //   msgArea = name of HTML node on which to set message
+        //   msg     = the message to display
+        //------------------------------------------------------------
+        window.feedbackMessage = function(msgArea,msg) {
+            var x = document.getElementById(msgArea);
+            if (x != null) {
+                x.innerHTML = msg;
+            }
+        };
+
+        // newSong - initialize a new song structure
+        //
+        // INPUTS
+        //   n  = name
+        //   id = unique id
+        //------------------------------------------------------------
+        function newSong(n,id) {
+            return {
+                name: n,
+                id: id,
+                lyrics: [],
+            };
+        }
+
+        // f - store lyrics for quick access
+        //     The title defines a new song. Its index number must
+        //     be unique for every different song.
+        //
+        // INPUTS
+        //   a = type of data:
+        //          t - title
+        //          v - verse
+        //          c - chorus
+        //          b - bridge
+        //          o - outro
+        //          i - intro
+        //   b = the data string
+        //   c = song index number, only needed on titles
+        //------------------------------------------------------------
+        function f(a,b,c) {
+            if (typeof c === "undefined") {
+                c = -1;
+            }
+        	var l = {
+        		sect: a,
+        		lyric: b,
+        	};
+            switch (a) {
+                case "t":  // title - new song
+                    s = newSong(b,c);                   // create the new song
+                    app.songs.push(s);                  // add it to our list
+                    app.song = app.songs.length - 1;    // index to this song
+                    break;
+                
+                case "v":  // verse lyric
+                case "c":  // chorus lyric
+                case "b":  // bridge lyric
+                case "o":  // outro lyric
+                case "i":  // intro lyric
+                    s = app.songs[app.song];
+                    s.lyrics.push(b);
+                    break;
+
+                default:
+                    console.log('UNKNOWN LYRIC DATA TYPE: ' + a + ' - ' + b);
+            }
+        }
+
+        function onMIDISuccess(midiAccess) {
+            feedbackMessage("midiaccess","Success!");
+            // esversion: 6
+            for (var input of midiAccess.inputs.values()) {
+                input.onmidimessage = getMIDIMessage;
+            }
+        }
+
+        function updateLyric() {
+            var i = app.page * 128 + app.line;
+            var song = app.songs[app.song];
+            feedbackMessage("song",''+song.name);
+            feedbackMessage("songIndex",''+app.song);
+            feedbackMessage("page",''+app.page);
+            feedbackMessage("line",''+app.line);
+            feedbackMessage("lyricIndex",''+i);
+            feedbackMessage("lyric", song.lyrics[i] );
+            if (i + 1 < song.lyrics.length) {
+                feedbackMessage("lyricNext", song.lyrics[i+1] );
+            } else if ( i + 1 == song.lyrics.length) {
+                feedbackMessage("lyricNext", "");
+            }
+        }
+
+
+        // getMIDIMessage
+        //  To make this prompting application work, we only need to know
+        //  what song and what lyric line of the song.  We will need 3 MIDI
+        //  messages to implement this.  We'll use the Program Change message
+        //  to inicate which song.  We'll use a combination of the Note On
+        //  message and the Control Change command to determine what lyric
+        //  lines to display.  The Note On parameter can range from 0 - 127.
+        //  If a song has more than 127 lines of lyrics then we need something
+        //  else.  We use the velocity value on the Pitch Bend control change
+        //  to establish a "page" number.  Lyric lines 0-127 are on page 0,
+        //  lines 128-256 are on page 1, and so on.  This should provide
+        //  ample space for lyrics of any song we do.
+        //  
+        //  1. A message to indicate which song.
+        //
+        //  2. A message to indicate what line of the song to center on the 
+        //     screen. Each lyric line is numbered. the lyric line is:
+        //     pageNo * 128 + NoteOn.
+        //---------------------------------------------------------------------
+        function getMIDIMessage(msg) {
+            // console.log(msg);
+            if (msg.srcElement.name === app.device) {
+                var cmd = msg.data[0];
+                switch (cmd) {
+                case 144:  
+                    {
+                        // *** LINE ***
+                        // noteOn, note
+                        // note value is the line
+                        app.line = msg.data[1];
+                        updateLyric();
+                    }
+                    break;
+                case 176:
+                    {
+                        // *** PAGE ***
+                        // Control Change, controllerNo, value
+                        // We use this to determine which page.
+                        // The controllerNo must be 69 (Pitch Bend). If it's not 69, ignore it.
+                        // The value is the page number
+                        var ctl = msg.data[1];
+                        if (ctl == 69) {
+                            app.page = msg.data[2];
+                            updateLyric();
+                        } else {
+                            feedbackMessage("unhandled", formatMessageData(msg));
+                        }
+                    }
+                    break;
+                case 192:
+                    {
+                        // *** SONG ***
+                        // program change:  1100nnnn  where nnnn = channel number. C000 is decimal 192
+                        // We use this as the Song Selector.  It is the index into our song array.
+                        app.song = msg.data[1] & 0x7F;
+                        feedbackMessage("songIndex",''+app.song);
+                        var lines = 0;
+                        if (app.song < app.songs.length) {
+                            feedbackMessage("lyricLines",''+app.songs[app.song].lyrics.length);
+                        }
+                    }
+                    break;
+                default:
+                    feedbackMessage("unhandled", formatMessageData(msg));
+                    break;
+                }
+            } else {
+                feedbackMessage("ignoreName",msg.srcElement.name);
+                feedbackMessage("ignoreData",formatMessageData(msg));
+            }
+        }
+
+        function onMIDIFailure() {
+            feedbackMessage("midiaccess","Could not access MIDI devices");
+        }
+
+        function init() {
+            navigator.requestMIDIAccess()
+                .then(onMIDISuccess, onMIDIFailure);
+
+            f("t","Wall of Love",7);
+            f("v","Did you hear that");
+            f("v","Was it thunder");
+            f("v","When you looked into my eyes");
+            f("v","I don't need this");
+            f("v","form of comfort");
+            f("v","It will just turn into lies");
+            f("v","I don't need you");
+            f("v","standing closer");
+            f("v","I don't want to take your hand");
+            f("v","I have built a");
+            f("v","fortress of metal");
+            f("v","and it surrounds me where I stand");
+            f("c","I feel the storm trying to warn me");
+            f("c","Of the impending Tsunami");
+            f("c","Approaching like a drowning wall of love");
+            f("v","I am ready");
+            f("v","to do battle");
+            f("v","I have faced it all before");
+            f("v","And the stakes are");
+            f("v","my survival");
+            f("v","nothing less and nothing more");
+            f("c","If you come on");
+            f("c","warm and tender");
+            f("c","I will never");
+            f("c","ever surrender");
+            f("c","To this fatal call, this drowning wall of love");
+            f("b","You tell me I'm lonely");
+            f("b","But I choose to be alone");
+            f("b","This heart of glass,");
+            f("b","Is a heart of stone");
+            f("b","heart of stone");
+            f("c","If you come on");
+            f("c","warm and tender");
+            f("c","I will never");
+            f("c","ever surrender");
+            f("c","To this fatal call, this drowning wall");
+
+            feedbackMessage("songcount", ''+app.songs.length);
+        }
+
+
+    </script>
+</head>
+
+<body>
+    <table border="1">
+        <tr>
+            <td>Songs Found:</td>
+            <td id="songcount"></td>
+        </tr>
+        <tr>
+            <td>MIDI Access:</td>
+            <td><span id="midiaccess"></td>
+        </tr>
+        <tr>
+            <td>Lyric Line:</td>
+            <td>
+                <table>
+                    <tr>
+                        <td>Song:</td>
+                        <td><span id="song"></span> (<span id="songIndex"></span>)</td>
+                    </tr>
+                    <tr>
+                        <td>Page:</td>
+                        <td id="page"></td>
+                    </tr>
+                    <tr>
+                        <td>Line:</td>
+                        <td id="line"></td>
+                    </tr>
+                    <tr>
+                        <td>Index:</td>
+                        <td id="lyricIndex"></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td>SONG Change</td>
+            <td>Song Index: <span id="songIndex"></span> &nbsp;&nbsp;Lyric Lines: <span id="lyricLines"></span> </td>
+        </tr>
+        <tr>
+            <td>Unhandled message:</td>
+            <td><span id="unhandled"></span>
+            </td>
+        <tr>
+            <td>Ignored message:</td>
+            <td>Device Name: <span id="ignoreName"></span> &nbsp;&nbsp;
+                data: <span id="ignoreData"></span>
+            </td>
+        </tr>
+    </table>
+
+    <p>
+    <div id="lyric" style="font-size: 60pt;text-align: center;"></div>
+    <br><br>
+    <div id="lyricNext" style="font-size: 40pt;text-align: center;color: #aaa;"></div>
+    </p>
+
+    <script>
+        init();
+    </script>
+
+</body>
+</html>
