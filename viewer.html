@@ -126,8 +126,9 @@
 
         function updateSong() {
             var song = app.songs[app.song];
-            feedbackMessage("song",''+song.name);
-
+            feedbackMessage("song", song.name);
+            feedbackMessage("lyric", song.name);
+            feedbackMessage("lyricNext", "");
         }
 
         function updateLyric() {
@@ -184,7 +185,9 @@
                     var ctl = msg.data[1];
                     if (ctl == 69) {
                         app.page = msg.data[2];
-                        updateLyric();
+                        // updateLyric();
+                        // feedbackMessage("lyric", app.songs[app.song].name );
+                        // feedbackMessage("lyricNext", app.songs[]);
                     } else {
                         feedbackMessage("unhandled", formatMessageData(msg));
                     }
