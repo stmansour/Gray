@@ -53,6 +53,10 @@
             }
         };
 
+        function greenMessage(a,msg) {
+            feedbackMessage(a, '<span style="color: #22aa22;">' + msg + '</span>');
+        }
+
         // newSong - initialize a new song structure
         //
         // INPUTS
@@ -118,7 +122,7 @@
                 for (var i = 0; i < app.devs.length; i++) {
                     if (input.name === app.devs[i]) {
                         input.onmidimessage = getMIDIMessage;
-                        feedbackMessage("listener", input.name );
+                        greenMessage("listener", input.name );
                     }
                 }
             }
@@ -126,7 +130,10 @@
 
         function updateSong() {
             var song = app.songs[app.song];
-            feedbackMessage("song", song.name);
+            greenMessage("song", song.name);
+            greenMessage("songid", app.song);
+            greenMessage("songpage", "");
+            greenMessage("songline", "");
             feedbackMessage("lyric", song.name);
             feedbackMessage("lyricNext", "");
         }
@@ -135,6 +142,7 @@
             var i = app.page * 128 + app.line;
             var song = app.songs[app.song];
             feedbackMessage("lyric", song.lyrics[i] );
+            greenMessage("songline", ''+i);
             if (i + 1 < song.lyrics.length) {
                 feedbackMessage("lyricNext", song.lyrics[i+1] );
             } else if ( i + 1 == song.lyrics.length) {
@@ -166,12 +174,18 @@
             // console.log(msg);
             var cmd = msg.data[0];
             switch (cmd) {
+                case 128:
+                // *** NOTE OFF ***
+                // we just ignore these...
+                // in the future we could use it to erase the line??
+                break;
             case 144:
                 {
                     // *** LINE ***
                     // noteOn, note
                     // note value is the line
                     app.line = msg.data[1];
+                    greenMessage("songline", ''+app.page);
                     updateLyric();
                 }
                 break;
@@ -185,11 +199,9 @@
                     var ctl = msg.data[1];
                     if (ctl == 69) {
                         app.page = msg.data[2];
-                        // updateLyric();
-                        // feedbackMessage("lyric", app.songs[app.song].name );
-                        // feedbackMessage("lyricNext", app.songs[]);
+                        greenMessage("songpage", ''+app.page);
                     } else {
-                        feedbackMessage("unhandled", formatMessageData(msg));
+                        greenMessage("unhandled", 'CC ' + msg.data[1] + ' ' + msg.data[2]);
                     }
                 }
                 break;
@@ -209,12 +221,12 @@
                         }
                     }
                     if (!found) {
-                        feedbackMessage("unhandled",'Song ID ' + songID + ' was not found!');
+                        greenMessage("unhandled",'Song ID ' + songID + ' was not found!');
                     }
                 }
                 break;
             default:
-                feedbackMessage("unhandled", formatMessageData(msg));
+                greenMessage("unhandled", formatMessageData(msg));
                 break;
             }
         }
@@ -266,7 +278,7 @@
             f("c","ever surrender");
             f("c","To this fatal call, this drowning wall");
 
-            feedbackMessage("songcount", ''+app.songs.length);
+            //feedbackMessage("songcount", ''+app.songs.length);
         }
 
 
@@ -277,19 +289,21 @@
     <table width="100%">
         <tr>
             <td id="midiaccess">MIDI</td>
-            <td>SONGS: <span id="songcount"></span></td>
-            <td><span id="song"></span></td>
-            <td>Listening on: <span id="listener"></span></td>
+            <td id="song"></td>
+            <td style="color: #22aa22;font-size: 10pt;">
+                SONG ID: <span id="songid"></span>
+                PAGE: <span id="songpage"></span>
+                LINE: <span id="songline"></span>
+            </td>
+            <td span id="listener" align="right"></td>
         </tr>
         <tr>
             <td ><span id="ignoreName">&nbsp;</span></td>
             <td colspan="2"><span id="unhandled">&nbsp;</span></td>
             <td></td>
         </tr>
+        <tr><td colspan="4" height="100"></td></tr>
     </table>
-    <p></p>
-    <p></p>
-    <p></p>
     <p>
     <div id="lyric" style="font-size: 60pt;text-align: center;"></div>
     <br><br>
