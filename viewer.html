@@ -15,7 +15,8 @@
 
     <script>
         var app = {
-            device: "IAC Driver IAC Bus 2", // Create a new device in the Audio MIDI Setup app for lyrics.
+            devs: ["IAC Driver IAC Bus 2", "IAC Driver Lyrics"], // Create a new device in the Audio MIDI Setup app for lyrics.
+            // device: "IAC Driver Bus 1", // Create a new device in the Audio MIDI Setup app for lyrics.
             songID: 0,                      // id of the song as identified in the midi message
             song: 0,                        // current song index
             page: 0,                        // current page (each page has 127 lines)
@@ -114,7 +115,12 @@
             var s = '<span style="background-color: #e0ffe0;color: #22aa22;border-color:#22aa22;border-style:solid;border-width: 2px 2px 2px 2px;">&nbsp;MIDI&nbsp;</span>';
             feedbackMessage("midiaccess",s);
             for (var input of midiAccess.inputs.values()) {
-                input.onmidimessage = getMIDIMessage;
+                for (var i = 0; i < app.devs.length; i++) {
+                    if (input.name === app.devs[i]) {
+                        input.onmidimessage = getMIDIMessage;
+                        feedbackMessage("listener", input.name );
+                    }
+                }
             }
         }
 
@@ -157,61 +163,56 @@
         //---------------------------------------------------------------------
         function getMIDIMessage(msg) {
             // console.log(msg);
-            if (msg.srcElement.name === app.device) {
-                var cmd = msg.data[0];
-                switch (cmd) {
-                case 144:
-                    {
-                        // *** LINE ***
-                        // noteOn, note
-                        // note value is the line
-                        app.line = msg.data[1];
-                        updateLyric();
-                    }
-                    break;
-                case 176:
-                    {
-                        // *** PAGE ***
-                        // Control Change, controllerNo, value
-                        // We use this to determine which page.
-                        // The controllerNo must be 69 (Pitch Bend). If it's not 69, ignore it.
-                        // The value is the page number
-                        var ctl = msg.data[1];
-                        if (ctl == 69) {
-                            app.page = msg.data[2];
-                            updateLyric();
-                        } else {
-                            feedbackMessage("unhandled", formatMessageData(msg));
-                        }
-                    }
-                    break;
-                case 192:
-                    {
-                        // *** SONG ***
-                        // program change, programNo:
-                        // We use the programNo as the song id.  It is the index into our song array.
-                        var songID = (msg.data[1] & 0x7F);
-                        var found = false;
-                        for (var i = 0; i < app.songs.length; i++) {
-                            if (app.songs[i].id == songID) {
-                                found = true;
-                                app.song = i; // the index to the selected song
-                                updateSong(); // updates the interface
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            feedbackMessage("unhandled",'Song ID ' + songID + ' was not found!');
-                        }
-                    }
-                    break;
-                default:
-                    feedbackMessage("unhandled", formatMessageData(msg));
-                    break;
+            var cmd = msg.data[0];
+            switch (cmd) {
+            case 144:
+                {
+                    // *** LINE ***
+                    // noteOn, note
+                    // note value is the line
+                    app.line = msg.data[1];
+                    updateLyric();
                 }
-            } else {
-                feedbackMessage("ignoreName",msg.srcElement.name);
-                feedbackMessage("ignoreData",formatMessageData(msg));
+                break;
+            case 176:
+                {
+                    // *** PAGE ***
+                    // Control Change, controllerNo, value
+                    // We use this to determine which page.
+                    // The controllerNo must be 69 (Pitch Bend). If it's not 69, ignore it.
+                    // The value is the page number
+                    var ctl = msg.data[1];
+                    if (ctl == 69) {
+                        app.page = msg.data[2];
+                        updateLyric();
+                    } else {
+                        feedbackMessage("unhandled", formatMessageData(msg));
+                    }
+                }
+                break;
+            case 192:
+                {
+                    // *** SONG ***
+                    // program change, programNo:
+                    // We use the programNo as the song id.  It is the index into our song array.
+                    var songID = (msg.data[1] & 0x7F);
+                    var found = false;
+                    for (var i = 0; i < app.songs.length; i++) {
+                        if (app.songs[i].id == songID) {
+                            found = true;
+                            app.song = i; // the index to the selected song
+                            updateSong(); // updates the interface
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        feedbackMessage("unhandled",'Song ID ' + songID + ' was not found!');
+                    }
+                }
+                break;
+            default:
+                feedbackMessage("unhandled", formatMessageData(msg));
+                break;
             }
         }
 
@@ -275,9 +276,12 @@
             <td id="midiaccess">MIDI</td>
             <td>SONGS: <span id="songcount"></span></td>
             <td><span id="song"></span></td>
+            <td>Listening on: <span id="listener"></span></td>
         </tr>
         <tr>
-            <td colspan="3"><span id="unhandled">&nbsp;</span></td>
+            <td ><span id="ignoreName">&nbsp;</span></td>
+            <td colspan="2"><span id="unhandled">&nbsp;</span></td>
+            <td></td>
         </tr>
     </table>
     <p></p>
